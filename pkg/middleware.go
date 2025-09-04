@@ -79,6 +79,10 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 			responseHeaders[string(key)] = string(value)
 		}
 	})
+	filePath, ok := c.Locals("filePath").(string)
+	if !ok {
+		log.Printf("[middleware] : filePath not found")
+	}
 
 	current := &LogBlock{
 		Service:    serviceName,
@@ -87,6 +91,7 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 		StatusCode: strconv.Itoa(c.Response().StatusCode()),
 		Request:    &BodyLog{Headers: requestHeaders, Body: payload},
 		Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
+		File:       filePath,
 	}
 
 	logInfo := Log{
@@ -108,6 +113,7 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 			StatusCode: strconv.Itoa(c.Response().StatusCode()),
 			Request:    &BodyLog{Headers: requestHeaders, Body: payload},
 			Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
+			File:       filePath,
 		}
 		jsonResp, err := json.Marshal(source)
 		if err != nil {

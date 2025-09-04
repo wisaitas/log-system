@@ -24,21 +24,19 @@ func main() {
 	app.Post("/do/:id", func(c *fiber.Ctx) error {
 		request := Request{}
 		if err := c.BodyParser(&request); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, err)
 		}
 
 		param := c.Params("id")
 		if param == "b" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": errors.New("b is not allowed").Error(),
-			})
+			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, errors.New("b is not allowed"))
 		}
 
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"full_name": request.FirstName + " " + request.LastName,
-		})
+		return c.Status(fiber.StatusOK).JSON(
+			pkg.NewSuccessResponse(&Response{
+				FullName: request.FirstName + " " + request.LastName,
+			}, fiber.StatusOK, nil, "Success"),
+		)
 	})
 
 	app.Listen(":8082")

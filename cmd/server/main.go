@@ -33,20 +33,15 @@ func main() {
 	app.Post("/do", func(c *fiber.Ctx) error {
 		var req Request
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, err)
 		}
 
-		var resp ProcessorResponse
+		var resp pkg.StandardResponse[*ProcessorRequest]
 		if err := pkg.DownStreamHttp(c, http.MethodPost, "http://localhost:8082/do/b", ProcessorRequest(req), &resp); err != nil {
-
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return pkg.NewErrorResponse[any](c, fiber.StatusInternalServerError, err)
 		}
 
-		return c.Status(fiber.StatusOK).JSON(resp)
+		return c.Status(resp.StatusCode).JSON(resp)
 	})
 
 	app.Listen(":8081")

@@ -32,10 +32,5 @@
             "last_name": "Doe"
         },
         "file": "/Users/wisaitas.kampanat/Library/CloudStorage/OneDrive-Accenture/repositories/poc/kubernetes-golang/internal/app/service/hello.go:26"
-    },
-    "performance": {
-        "cpu_usage": 45.2,
-        "memory_usage": 1024,
-        "duration": "100ms"
     }
 }

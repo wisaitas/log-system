@@ -3,6 +3,7 @@ package pkg
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -11,8 +12,10 @@ import (
 )
 
 const (
-	HeaderTraceID = "Trace-ID"
-	HeaderErrSig  = "X-Error-Signature"
+	HeaderTraceID      = "Trace-Id"
+	HeaderErrSignature = "X-Error-Signature"
+	HeaderInternal     = "X-Internal-Call"
+	HeaderSource       = "X-Source"
 )
 
 func NewLogger(serviceName string) fiber.Handler {
@@ -22,7 +25,6 @@ func NewLogger(serviceName string) fiber.Handler {
 			tid, _ := uuid.NewV7()
 			traceID = tid.String()
 		}
-		c.Request().Header.Set(HeaderTraceID, traceID)
 		c.Set(HeaderTraceID, traceID)
 		switch c.Get("Content-Type") {
 		case "application/json":
@@ -34,7 +36,6 @@ func NewLogger(serviceName string) fiber.Handler {
 }
 
 type Log struct {
-	TraceID    string `json:"trace_id"`
 	Timestamp  string `json:"timestamp"`
 	DurationMs string `json:"duration_ms"`
 
@@ -60,20 +61,23 @@ type BodyLog struct {
 
 func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	start := time.Now()
-	traceID := c.Get(HeaderTraceID)
 	payload := readJSONMapLimited(c.Body(), 64<<10)
 	requestHeaders := make(map[string]string)
 	c.Request().Header.VisitAll(func(key, value []byte) {
 		requestHeaders[string(key)] = string(value)
 	})
 
-	err := c.Next()
+	if err := c.Next(); err != nil {
+		return err
+	}
 
 	responseBody := c.Response().Body()
 	responsePayload := readJSONMapLimited(responseBody, 64<<10)
 	responseHeaders := make(map[string]string)
 	c.Response().Header.VisitAll(func(key, value []byte) {
-		responseHeaders[string(key)] = string(value)
+		if string(key) != HeaderTraceID && string(key) != HeaderSource {
+			responseHeaders[string(key)] = string(value)
+		}
 	})
 
 	current := &LogBlock{
@@ -86,15 +90,40 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	}
 
 	logInfo := Log{
-		TraceID:    traceID,
 		Timestamp:  start.Format(time.RFC3339),
 		DurationMs: strconv.Itoa(int(time.Since(start).Milliseconds())),
 		Current:    current,
 	}
 
-	jsonResp, _ := json.Marshal(logInfo)
+	source := &LogBlock{}
+	if string(c.Response().Header.Peek(HeaderSource)) != "" {
+		if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
+			log.Printf("[middleware] : %s", err.Error())
+		}
+	} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
+		source = &LogBlock{
+			Service:    serviceName,
+			Method:     c.Method(),
+			Path:       c.Hostname() + c.Path(),
+			StatusCode: strconv.Itoa(c.Response().StatusCode()),
+			Request:    &BodyLog{Headers: requestHeaders, Body: payload},
+			Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
+		}
+		jsonResp, err := json.Marshal(source)
+		if err != nil {
+			log.Printf("[middleware] : %s", err.Error())
+		}
+		c.Response().Header.Set(HeaderSource, string(jsonResp))
+	}
+	logInfo.Source = source
 
-	if !checkStatus2xx(c.Response().StatusCode()) && c.Get(HeaderErrSig) == "" {
+	if c.Get(HeaderInternal) != "true" {
+		c.Response().Header.Del(HeaderSource)
+	}
+
+	jsonResp, err := json.Marshal(logInfo)
+	if err != nil {
+		log.Printf("[middleware] : %s", err.Error())
 	}
 
 	fmt.Println(string(jsonResp))
@@ -117,11 +146,4 @@ func tryParseJSON(b []byte) map[string]any {
 		return m
 	}
 	return nil
-}
-
-func checkStatus2xx(statusCode int) bool {
-	if statusCode >= 200 && statusCode < 300 {
-		return true
-	}
-	return false
 }

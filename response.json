@@ -1,49 +1,62 @@
 {
-    "trace_id": "019912dc-57a3-7a41-a148-adedf5204fd0",
-    "timestamp": "2025-09-04T10:54:14+07:00",
-    "duration_ms": "1",
+    "timestamp": "2025-09-05T01:29:02+07:00",
+    "duration_ms": "0",
     "current": {
         "service": "processor",
-        "headers": {
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "close",
-            "Content-Length": "52",
-            "Content-Type": "application/json",
-            "Host": "localhost:8082",
-            "Trace-Id": "019912dc-57a3-7a41-a148-adedf5204fd0",
-            "User-Agent": "vscode-restclient"
-        },
         "method": "POST",
         "path": "localhost:8082/do/b",
         "status_code": "400",
-        "payload": {
-            "first_name": "John",
-            "last_name": "Doe"
+        "request": {
+            "headers": {
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "close",
+                "Content-Length": "39",
+                "Content-Type": "application/json",
+                "Host": "localhost:8082",
+                "User-Agent": "vscode-restclient",
+                "X-Internal-Call": "true"
+            },
+            "body": {
+                "first_name": "John",
+                "last_name": "Doe"
+            }
         },
         "response": {
-            "error": "b is not allowed"
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": {
+                "error": "b is not allowed"
+            }
         }
     },
     "source": {
         "service": "processor",
-        "headers": {
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "close",
-            "Content-Length": "52",
-            "Content-Type": "application/json",
-            "Host": "localhost:8082",
-            "Trace-Id": "019912dc-57a3-7a41-a148-adedf5204fd0",
-            "User-Agent": "vscode-restclient"
-        },
         "method": "POST",
         "path": "localhost:8082/do/b",
         "status_code": "400",
-        "payload": {
-            "first_name": "John",
-            "last_name": "Doe"
+        "request": {
+            "headers": {
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "close",
+                "Content-Length": "39",
+                "Content-Type": "application/json",
+                "Host": "localhost:8082",
+                "User-Agent": "vscode-restclient",
+                "X-Internal-Call": "true"
+            },
+            "body": {
+                "first_name": "John",
+                "last_name": "Doe"
+            }
         },
         "response": {
-            "error": "b is not allowed"
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": {
+                "error": "b is not allowed"
+            }
         }
     }
 }

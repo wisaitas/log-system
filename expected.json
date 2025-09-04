@@ -1,0 +1,41 @@
+{
+    "trace_id": "080756bb07ef25ebf08ad51d020678b9",
+    "timestamp": "2025-09-04T02:25:39.1585767+07:00",
+    "current": {
+        "service": "svc-a",
+        "http_path": "POST localhost:8081/do",
+        "status_code": "500",
+        "code": "E50000",
+        "message": "error in current service",
+        "payload": {
+            "fisrt_name": "John",
+            "last_name": "Doe"
+        },
+        "response": {
+            "fisrt_name": "John",
+            "last_name": "Doe"
+        },
+        "file": "/Users/wisaitas.kampanat/Library/CloudStorage/OneDrive-Accenture/repositories/poc/kubernetes-golang/internal/app/service/hello.go:26"
+    },
+    "source": {
+        "service": "svc-b",
+        "http_path": "POST localhost:8081/do",
+        "status_code": "500",
+        "code": "E50000",
+        "message": "error in source service",
+        "payload": {
+            "fisrt_name": "John",
+            "last_name": "Doe"
+        },
+        "response": {
+            "fisrt_name": "John",
+            "last_name": "Doe"
+        },
+        "file": "/Users/wisaitas.kampanat/Library/CloudStorage/OneDrive-Accenture/repositories/poc/kubernetes-golang/internal/app/service/hello.go:26"
+    },
+    "performance": {
+        "cpu_usage": 45.2,
+        "memory_usage": 1024,
+        "duration": "100ms"
+    }
+}

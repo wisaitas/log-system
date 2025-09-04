@@ -1,0 +1,7 @@
+POST http://localhost:8082/do/b
+Content-Type: application/json
+
+{
+    "first_name": "John",
+    "last_name": "Doe"
+}

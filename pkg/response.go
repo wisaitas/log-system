@@ -27,14 +27,6 @@ type Pagination struct {
 	IsLastPage    bool `json:"is_last_page"`
 }
 
-// type LogInfo struct {
-// 	Message    string `json:"message"`
-// 	File       string `json:"file"`
-// 	Line       int    `json:"line"`
-// 	Func       string `json:"func"`
-// 	StatusCode int    `json:"status_code"`
-// }
-
 func NewErrorResponse[T any](c *fiber.Ctx, statusCode int, err error) error {
 	if err == nil {
 		return nil
@@ -78,9 +70,9 @@ func NewErrorResponse[T any](c *fiber.Ctx, statusCode int, err error) error {
 }
 
 func NewSuccessResponse[T any](data *T, statusCode int, pagination *Pagination, publicMessage ...string) StandardResponse[T] {
-	msg := ""
+	var msg *string
 	if len(publicMessage) > 0 {
-		msg = publicMessage[0]
+		msg = Ptr(publicMessage[0])
 	}
 
 	var code string
@@ -102,6 +94,6 @@ func NewSuccessResponse[T any](data *T, statusCode int, pagination *Pagination, 
 		Data:          data,
 		Code:          code,
 		Pagination:    pagination,
-		PublicMessage: &msg,
+		PublicMessage: msg,
 	}
 }

@@ -15,13 +15,13 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 	client := &http.Client{}
 	reqJson, err := json.Marshal(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("[apicaller] : %w", err)
 	}
 	body := bytes.NewReader(reqJson)
 
 	reqHttp, err := http.NewRequestWithContext(c.UserContext(), method, url, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("[apicaller] : %w", err)
 	}
 
 	for key, values := range c.GetReqHeaders() {
@@ -33,7 +33,7 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 
 	respHttp, err := client.Do(reqHttp)
 	if err != nil {
-		return err
+		return fmt.Errorf("[apicaller] : %w", err)
 	}
 	defer respHttp.Body.Close()
 
@@ -46,7 +46,7 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 	}
 
 	if err = json.NewDecoder(respHttp.Body).Decode(resp); err != nil {
-		return err
+		return fmt.Errorf("[apicaller] : %w", err)
 	}
 
 	if respHttp.StatusCode != http.StatusOK {
@@ -55,10 +55,12 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 
 	_, file, line, ok := runtime.Caller(1)
 	if !ok {
-		return errors.New("runtime.Caller failed")
+		return fmt.Errorf("[apicaller] : %w", errors.New("runtime.Caller failed"))
 	}
 
-	filePath := fmt.Sprintf("%s:%d", file, line)
+	filePath := Ptr(fmt.Sprintf("%s:%d", file, line))
+
+	fmt.Println(*resp.Data)
 
 	c.Locals("filePath", filePath)
 	return nil

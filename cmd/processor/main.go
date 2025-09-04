@@ -35,7 +35,7 @@ func main() {
 		return c.Status(fiber.StatusOK).JSON(
 			pkg.NewSuccessResponse(&Response{
 				FullName: request.FirstName + " " + request.LastName,
-			}, fiber.StatusOK, nil, "Success"),
+			}, fiber.StatusOK, nil),
 		)
 	})
 

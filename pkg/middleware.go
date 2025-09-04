@@ -48,10 +48,10 @@ type LogBlock struct {
 	Method     string   `json:"method"`
 	Path       string   `json:"path"`
 	StatusCode string   `json:"status_code"`
-	Code       string   `json:"code,omitempty"`
-	Request    *BodyLog `json:"request,omitempty"`
-	Response   *BodyLog `json:"response,omitempty"`
-	File       string   `json:"file,omitempty"`
+	Code       string   `json:"code"`
+	Request    *BodyLog `json:"request"`
+	Response   *BodyLog `json:"response"`
+	File       *string  `json:"file"`
 }
 
 type BodyLog struct {
@@ -79,9 +79,14 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 			responseHeaders[string(key)] = string(value)
 		}
 	})
-	filePath, ok := c.Locals("filePath").(string)
-	if !ok {
-		log.Printf("[middleware] : filePath not found")
+
+	var filePath *string
+	if !checkStatusCode2xx(c.Response().StatusCode()) {
+		filePathFromLocals, ok := c.Locals("filePath").(string)
+		if !ok {
+			log.Printf("[middleware] : filePath not found")
+		}
+		filePath = Ptr(filePathFromLocals)
 	}
 
 	current := &LogBlock{
@@ -134,6 +139,10 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 
 	fmt.Println(string(jsonResp))
 	return err
+}
+
+func checkStatusCode2xx(statusCode int) bool {
+	return statusCode >= 200 && statusCode < 300
 }
 
 func readJSONMapLimited(b []byte, limit int) map[string]any {

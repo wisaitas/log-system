@@ -30,14 +30,16 @@ func main() {
 
 	app.Use(pkg.NewLogger("server"))
 
-	app.Post("/do", func(c *fiber.Ctx) error {
+	app.Post("/do/:id", func(c *fiber.Ctx) error {
 		var req Request
 		if err := c.BodyParser(&req); err != nil {
 			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, err)
 		}
 
-		var resp pkg.StandardResponse[*ProcessorRequest]
-		if err := pkg.DownStreamHttp(c, http.MethodPost, "http://localhost:8082/do/b", ProcessorRequest(req), &resp); err != nil {
+		paramID := c.Params("id")
+
+		var resp pkg.StandardResponse[*ProcessorResponse]
+		if err := pkg.DownStreamHttp(c, http.MethodPost, "http://localhost:8082/do/"+paramID, ProcessorRequest(req), &resp); err != nil {
 			return pkg.NewErrorResponse[any](c, fiber.StatusInternalServerError, err)
 		}
 

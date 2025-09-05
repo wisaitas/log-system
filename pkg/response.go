@@ -1,12 +1,39 @@
 package pkg
 
 import (
-	"fmt"
 	"log"
 	"runtime"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+)
+
+// Pre-allocated error code maps for better performance
+var (
+	errorCodes = map[int]string{
+		304: "E30400",
+		400: "E40000",
+		401: "E40002",
+		403: "E40003",
+		404: "E40004",
+		500: "E50000",
+	}
+
+	successCodes = map[int]string{
+		200: "E20000",
+		201: "E20001",
+		204: "E20004",
+	}
+
+	// String builder pool for file path construction
+	filePathPool = sync.Pool{
+		New: func() interface{} {
+			return &strings.Builder{}
+		},
+	}
 )
 
 type StandardResponse[T any] struct {
@@ -32,32 +59,28 @@ func NewErrorResponse[T any](c *fiber.Ctx, statusCode int, err error) error {
 		return nil
 	}
 
-	var code string
-
-	switch statusCode {
-	case 304:
-		code = "E30400"
-	case 400:
-		code = "E40000"
-	case 401:
-		code = "E40002"
-	case 403:
-		code = "E40003"
-	case 404:
-		code = "E40004"
-	case 500:
-		code = "E50000"
-	default:
+	// Use pre-allocated error codes
+	code, exists := errorCodes[statusCode]
+	if !exists {
 		code = "E50000"
 	}
 
+	// Optimize file path generation
 	_, file, line, ok := runtime.Caller(1)
 	if !ok {
 		log.Println("[response] : runtime.Caller failed")
 	}
 
-	filePath := fmt.Sprintf("%s:%d", file, line)
+	// Use string builder pool for better performance
+	builder := filePathPool.Get().(*strings.Builder)
+	builder.Reset()
+	defer filePathPool.Put(builder)
 
+	builder.WriteString(file)
+	builder.WriteByte(':')
+	builder.WriteString(strconv.Itoa(line))
+
+	filePath := builder.String()
 	c.Locals("filePath", filePath)
 
 	return c.Status(statusCode).JSON(&StandardResponse[T]{
@@ -75,16 +98,9 @@ func NewSuccessResponse[T any](data *T, statusCode int, pagination *Pagination, 
 		msg = Ptr(publicMessage[0])
 	}
 
-	var code string
-
-	switch statusCode {
-	case 200:
-		code = "E20000"
-	case 201:
-		code = "E20001"
-	case 204:
-		code = "E20004"
-	default:
+	// Use pre-allocated success codes
+	code, exists := successCodes[statusCode]
+	if !exists {
 		code = "E20000"
 	}
 

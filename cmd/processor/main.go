@@ -17,12 +17,17 @@ type Response struct {
 }
 
 func main() {
-	app := fiber.New()
+	// Optimize Fiber configuration
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+		ServerHeader:          "log-system",
+		AppName:               "log-system v1.0.0",
+	})
 
 	app.Use(pkg.NewLogger("processor"))
 
 	app.Post("/do/:id", func(c *fiber.Ctx) error {
-		request := Request{}
+		var request Request
 		if err := c.BodyParser(&request); err != nil {
 			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, err)
 		}
@@ -32,10 +37,13 @@ func main() {
 			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, errors.New("b is not allowed"))
 		}
 
+		// Pre-allocate response data
+		responseData := &Response{
+			FullName: request.FirstName + " " + request.LastName,
+		}
+
 		return c.Status(fiber.StatusOK).JSON(
-			pkg.NewSuccessResponse(&Response{
-				FullName: request.FirstName + " " + request.LastName,
-			}, fiber.StatusOK, nil),
+			pkg.NewSuccessResponse(responseData, fiber.StatusOK, nil),
 		)
 	})
 

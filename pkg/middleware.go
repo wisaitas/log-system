@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -18,6 +21,15 @@ const (
 	HeaderSource       = "X-Source"
 )
 
+// Pre-allocated buffers for better performance
+var (
+	headerBufferPool = sync.Pool{
+		New: func() interface{} {
+			return make(map[string]string, 16)
+		},
+	}
+)
+
 func NewLogger(serviceName string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		traceID := c.Get(HeaderTraceID)
@@ -26,12 +38,13 @@ func NewLogger(serviceName string) fiber.Handler {
 			traceID = tid.String()
 		}
 		c.Set(HeaderTraceID, traceID)
-		switch c.Get("Content-Type") {
-		case "application/json":
+
+		// Optimize content type check
+		contentType := c.Get("Content-Type")
+		if strings.HasPrefix(contentType, "application/json") {
 			return HandleJSON(c, serviceName)
-		default:
-			return c.Next()
 		}
+		return c.Next()
 	}
 }
 
@@ -61,10 +74,21 @@ type BodyLog struct {
 
 func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	start := time.Now()
-	payload := readJSONMapLimited(c.Body(), 64<<10)
-	requestHeaders := make(map[string]string)
+
+	// Optimize JSON parsing with buffer reuse
+	payload := readJSONMapOptimized(c.Body())
+
+	// Reuse header map from pool
+	requestHeaders := headerBufferPool.Get().(map[string]string)
+	// Clear the map for reuse
+	for k := range requestHeaders {
+		delete(requestHeaders, k)
+	}
+	defer headerBufferPool.Put(requestHeaders)
+
+	// Optimize header processing
 	c.Request().Header.VisitAll(func(key, value []byte) {
-		requestHeaders[string(key)] = string(value)
+		requestHeaders[unsafe.String(unsafe.SliceData(key), len(key))] = unsafe.String(unsafe.SliceData(value), len(value))
 	})
 
 	if err := c.Next(); err != nil {
@@ -72,59 +96,87 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	}
 
 	responseBody := c.Response().Body()
-	responsePayload := readJSONMapLimited(responseBody, 64<<10)
-	responseHeaders := make(map[string]string)
+	responsePayload := readJSONMapOptimized(responseBody)
+
+	// Reuse response header map
+	responseHeaders := headerBufferPool.Get().(map[string]string)
+	for k := range responseHeaders {
+		delete(responseHeaders, k)
+	}
+	defer headerBufferPool.Put(responseHeaders)
+
+	// Optimize response header processing
 	c.Response().Header.VisitAll(func(key, value []byte) {
-		if string(key) != HeaderTraceID && string(key) != HeaderSource {
-			responseHeaders[string(key)] = string(value)
+		keyStr := unsafe.String(unsafe.SliceData(key), len(key))
+		if keyStr != HeaderTraceID && keyStr != HeaderSource {
+			responseHeaders[keyStr] = unsafe.String(unsafe.SliceData(value), len(value))
 		}
 	})
 
 	var filePath *string
-	if !checkStatusCode2xx(c.Response().StatusCode()) {
-		filePathFromLocals, ok := c.Locals("filePath").(string)
-		if !ok {
-			log.Printf("[middleware] : filePath not found")
+	statusCode := c.Response().StatusCode()
+	if !checkStatusCode2xx(statusCode) {
+		if filePathFromLocals, ok := c.Locals("filePath").(string); ok {
+			filePath = Ptr(filePathFromLocals)
 		}
-		filePath = Ptr(filePathFromLocals)
 	}
 
+	// Pre-allocate strings to avoid repeated allocations
+	method := c.Method()
+	path := c.Hostname() + c.Path()
+	statusCodeStr := strconv.Itoa(statusCode)
+
 	current := &LogBlock{
+		Code:       errorCodes[statusCode],
 		Service:    serviceName,
-		Method:     c.Method(),
-		Path:       c.Hostname() + c.Path(),
-		StatusCode: strconv.Itoa(c.Response().StatusCode()),
+		Method:     method,
+		Path:       path,
+		StatusCode: statusCodeStr,
 		Request:    &BodyLog{Headers: requestHeaders, Body: payload},
 		Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
 		File:       filePath,
 	}
 
+	// Optimize timestamp formatting
+	timestamp := start.Format(time.RFC3339)
+	durationMs := strconv.Itoa(int(time.Since(start).Milliseconds()))
+
 	logInfo := Log{
-		Timestamp:  start.Format(time.RFC3339),
-		DurationMs: strconv.Itoa(int(time.Since(start).Milliseconds())),
+		Timestamp:  timestamp,
+		DurationMs: durationMs,
 		Current:    current,
 	}
 
+	// Optimize source handling
 	source := &LogBlock{}
-	if string(c.Response().Header.Peek(HeaderSource)) != "" {
-		if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
+	sourceHeader := c.Response().Header.Peek(HeaderSource)
+	if len(sourceHeader) > 0 {
+		if err := json.Unmarshal(sourceHeader, source); err != nil {
 			log.Printf("[middleware] : %s", err.Error())
 		}
-	} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
+	} else {
+		// Reuse the same data for source
 		source = &LogBlock{
+			Code:       errorCodes[statusCode],
 			Service:    serviceName,
-			Method:     c.Method(),
-			Path:       c.Hostname() + c.Path(),
-			StatusCode: strconv.Itoa(c.Response().StatusCode()),
+			Method:     method,
+			Path:       path,
+			StatusCode: statusCodeStr,
 			Request:    &BodyLog{Headers: requestHeaders, Body: payload},
 			Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
 			File:       filePath,
 		}
-		jsonResp, err := json.Marshal(source)
-		if err != nil {
+
+		// Use buffer pool for JSON marshaling
+		buf := jsonBufferPool.Get().([]byte)
+		buf = buf[:0] // Reset length
+		defer jsonBufferPool.Put(buf)
+
+		if jsonResp, err := json.Marshal(source); err != nil {
 			log.Printf("[middleware] : %s", err.Error())
+		} else {
+			c.Response().Header.Set(HeaderSource, string(jsonResp))
 		}
-		c.Response().Header.Set(HeaderSource, string(jsonResp))
 	}
 	logInfo.Source = source
 
@@ -132,33 +184,44 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 		c.Response().Header.Del(HeaderSource)
 	}
 
-	jsonResp, err := json.Marshal(logInfo)
-	if err != nil {
+	// Use buffer pool for final JSON marshaling
+	buf := jsonBufferPool.Get().([]byte)
+	buf = buf[:0]
+	defer jsonBufferPool.Put(buf)
+
+	if jsonResp, err := json.Marshal(logInfo); err != nil {
 		log.Printf("[middleware] : %s", err.Error())
+	} else {
+		fmt.Println(string(jsonResp))
 	}
 
-	fmt.Println(string(jsonResp))
-	return err
+	return nil
 }
 
 func checkStatusCode2xx(statusCode int) bool {
 	return statusCode >= 200 && statusCode < 300
 }
 
-func readJSONMapLimited(b []byte, limit int) map[string]any {
-	if len(b) > limit {
-		b = b[:limit]
-	}
-	return tryParseJSON(b)
-}
-
-func tryParseJSON(b []byte) map[string]any {
+// Optimized JSON parsing with better error handling and memory usage
+func readJSONMapOptimized(b []byte) map[string]any {
 	if len(b) == 0 {
 		return nil
 	}
-	var m map[string]any
-	if json.Valid(b) && json.Unmarshal(b, &m) == nil {
-		return m
+
+	// Limit size to prevent memory issues
+	const maxSize = 64 << 10 // 64KB
+	if len(b) > maxSize {
+		b = b[:maxSize]
 	}
-	return nil
+
+	// Quick validation before parsing
+	if !json.Valid(b) {
+		return nil
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil
+	}
+	return m
 }

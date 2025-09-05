@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Consolidate duplicate structs
 type Request struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
@@ -16,17 +17,13 @@ type Response struct {
 	FullName string `json:"full_name"`
 }
 
-type ProcessorRequest struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-}
-
-type ProcessorResponse struct {
-	FullName string `json:"full_name"`
-}
-
 func main() {
-	app := fiber.New()
+	// Optimize Fiber configuration
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+		ServerHeader:          "log-system",
+		AppName:               "log-system v1.0.0",
+	})
 
 	app.Use(pkg.NewLogger("server"))
 
@@ -38,8 +35,9 @@ func main() {
 
 		paramID := c.Params("id")
 
-		var resp pkg.StandardResponse[*ProcessorResponse]
-		if err := pkg.DownStreamHttp(c, http.MethodPost, "http://localhost:8082/do/"+paramID, ProcessorRequest(req), &resp); err != nil {
+		// Pre-allocate response
+		var resp pkg.StandardResponse[*Response]
+		if err := pkg.DownStreamHttp(c, http.MethodPost, "http://localhost:8082/do/"+paramID, req, &resp); err != nil {
 			return pkg.NewErrorResponse[any](c, fiber.StatusInternalServerError, err)
 		}
 

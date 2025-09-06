@@ -27,6 +27,11 @@ type Pagination struct {
 	IsLastPage    bool `json:"is_last_page"`
 }
 
+type ErrorContext struct {
+	FilePath     *string `json:"file_path"`
+	ErrorMessage string  `json:"error_message"`
+}
+
 func NewErrorResponse[T any](c *fiber.Ctx, statusCode int, err error) error {
 	if err == nil {
 		return nil
@@ -58,7 +63,10 @@ func NewErrorResponse[T any](c *fiber.Ctx, statusCode int, err error) error {
 
 	filePath := fmt.Sprintf("%s:%d", file, line)
 
-	c.Locals("filePath", filePath)
+	c.Locals("errorContext", ErrorContext{
+		FilePath:     &filePath,
+		ErrorMessage: err.Error(),
+	})
 
 	return c.Status(statusCode).JSON(&StandardResponse[T]{
 		Timestamp:  time.Now().Format(time.RFC3339),
@@ -72,7 +80,7 @@ func NewErrorResponse[T any](c *fiber.Ctx, statusCode int, err error) error {
 func NewSuccessResponse[T any](data *T, statusCode int, pagination *Pagination, publicMessage ...string) StandardResponse[T] {
 	var msg *string
 	if len(publicMessage) > 0 {
-		msg = Ptr(publicMessage[0])
+		msg = &publicMessage[0]
 	}
 
 	var code string

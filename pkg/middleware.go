@@ -25,7 +25,9 @@ func NewLogger(serviceName string) fiber.Handler {
 			tid, _ := uuid.NewV7()
 			traceID = tid.String()
 		}
+		c.Request().Header.Set(HeaderTraceID, traceID)
 		c.Set(HeaderTraceID, traceID)
+		c.Locals("useCaller", false)
 		switch c.Get("Content-Type") {
 		case "application/json":
 			return HandleJSON(c, serviceName)
@@ -36,8 +38,10 @@ func NewLogger(serviceName string) fiber.Handler {
 }
 
 type Log struct {
-	Timestamp  string `json:"timestamp"`
-	DurationMs string `json:"duration_ms"`
+	TraceID      string  `json:"trace_id"`
+	ErrorMessage *string `json:"error_message,omitempty"`
+	Timestamp    string  `json:"timestamp"`
+	DurationMs   string  `json:"duration_ms"`
 
 	Current *LogBlock `json:"current"`
 	Source  *LogBlock `json:"source,omitempty"`
@@ -51,7 +55,7 @@ type LogBlock struct {
 	Code       string   `json:"code"`
 	Request    *BodyLog `json:"request"`
 	Response   *BodyLog `json:"response"`
-	File       *string  `json:"file"`
+	File       *string  `json:"file,omitempty"`
 }
 
 type BodyLog struct {
@@ -64,7 +68,9 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	payload := readJSONMapLimited(c.Body(), 64<<10)
 	requestHeaders := make(map[string]string)
 	c.Request().Header.VisitAll(func(key, value []byte) {
-		requestHeaders[string(key)] = string(value)
+		if string(key) != HeaderTraceID {
+			requestHeaders[string(key)] = string(value)
+		}
 	})
 
 	if err := c.Next(); err != nil {
@@ -80,13 +86,13 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 		}
 	})
 
-	var filePath *string
+	errorContext := &ErrorContext{}
 	if !checkStatusCode2xx(c.Response().StatusCode()) {
-		filePathFromLocals, ok := c.Locals("filePath").(string)
+		errorContextLocal, ok := c.Locals("errorContext").(ErrorContext)
 		if !ok {
-			log.Printf("[middleware] : filePath not found")
+			log.Printf("[middleware] : errorContext not found")
 		}
-		filePath = Ptr(filePathFromLocals)
+		errorContext = &errorContextLocal
 	}
 
 	current := &LogBlock{
@@ -96,37 +102,46 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 		StatusCode: strconv.Itoa(c.Response().StatusCode()),
 		Request:    &BodyLog{Headers: requestHeaders, Body: payload},
 		Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
-		File:       filePath,
+		File:       errorContext.FilePath,
 	}
 
 	logInfo := Log{
-		Timestamp:  start.Format(time.RFC3339),
-		DurationMs: strconv.Itoa(int(time.Since(start).Milliseconds())),
-		Current:    current,
+		TraceID:      c.Get(HeaderTraceID),
+		ErrorMessage: &errorContext.ErrorMessage,
+		Timestamp:    start.Format(time.RFC3339),
+		DurationMs:   strconv.Itoa(int(time.Since(start).Milliseconds())),
+		Current:      current,
 	}
 
-	source := &LogBlock{}
-	if string(c.Response().Header.Peek(HeaderSource)) != "" {
-		if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
-			log.Printf("[middleware] : %s", err.Error())
-		}
-	} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
-		source = &LogBlock{
-			Service:    serviceName,
-			Method:     c.Method(),
-			Path:       c.Hostname() + c.Path(),
-			StatusCode: strconv.Itoa(c.Response().StatusCode()),
-			Request:    &BodyLog{Headers: requestHeaders, Body: payload},
-			Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
-			File:       filePath,
-		}
-		jsonResp, err := json.Marshal(source)
-		if err != nil {
-			log.Printf("[middleware] : %s", err.Error())
-		}
-		c.Response().Header.Set(HeaderSource, string(jsonResp))
+	useCaller, ok := c.Locals("useCaller").(bool)
+	if !ok {
+		log.Printf("[middleware] : useCaller not found")
 	}
-	logInfo.Source = source
+
+	source := new(LogBlock)
+	if useCaller {
+		if string(c.Response().Header.Peek(HeaderSource)) != "" {
+			if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
+				log.Printf("[middleware] : %s", err.Error())
+			}
+		} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
+			source = &LogBlock{
+				Service:    serviceName,
+				Method:     c.Method(),
+				Path:       c.Hostname() + c.Path(),
+				StatusCode: strconv.Itoa(c.Response().StatusCode()),
+				Request:    &BodyLog{Headers: requestHeaders, Body: payload},
+				Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
+				File:       errorContext.FilePath,
+			}
+			jsonResp, err := json.Marshal(source)
+			if err != nil {
+				log.Printf("[middleware] : %s", err.Error())
+			}
+			c.Response().Header.Set(HeaderSource, string(jsonResp))
+		}
+		logInfo.Source = source
+	}
 
 	if c.Get(HeaderInternal) != "true" {
 		c.Response().Header.Del(HeaderSource)

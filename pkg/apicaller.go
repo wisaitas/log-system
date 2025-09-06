@@ -3,8 +3,8 @@ package pkg
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"runtime"
 
@@ -49,19 +49,21 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 		return fmt.Errorf("[apicaller] : %w", err)
 	}
 
-	if respHttp.StatusCode != http.StatusOK {
-		resp.Data = new(T)
+	c.Locals("useCaller", true)
+
+	if !checkStatusCode2xx(respHttp.StatusCode) {
+		_, file, line, ok := runtime.Caller(1)
+		if !ok {
+			log.Println("[apicaller] : runtime.Caller failed")
+		}
+		filePath := fmt.Sprintf("%s:%d", file, line)
+		resp.Data = nil
+		resp.Pagination = nil
+		c.Locals("errorContext", ErrorContext{
+			FilePath:     &filePath,
+			ErrorMessage: fmt.Sprintf("[apicaller] : error when call %s", c.Request().URI().String()),
+		})
 	}
 
-	_, file, line, ok := runtime.Caller(1)
-	if !ok {
-		return fmt.Errorf("[apicaller] : %w", errors.New("runtime.Caller failed"))
-	}
-
-	filePath := Ptr(fmt.Sprintf("%s:%d", file, line))
-
-	fmt.Println(*resp.Data)
-
-	c.Locals("filePath", filePath)
 	return nil
 }

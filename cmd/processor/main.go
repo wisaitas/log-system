@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"log-system/pkg"
+	"log-system/pkg/httpx"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -19,21 +19,21 @@ type Response struct {
 func main() {
 	app := fiber.New()
 
-	app.Use(pkg.NewLogger("processor"))
+	app.Use(httpx.NewLogger("processor"))
 
 	app.Post("/do/:id", func(c *fiber.Ctx) error {
 		request := Request{}
 		if err := c.BodyParser(&request); err != nil {
-			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, err)
+			return httpx.NewErrorResponse[any](c, fiber.StatusBadRequest, err)
 		}
 
 		param := c.Params("id")
 		if param == "b" {
-			return pkg.NewErrorResponse[any](c, fiber.StatusBadRequest, errors.New("b is not allowed"))
+			return httpx.NewErrorResponse[any](c, fiber.StatusBadRequest, errors.New("b is not allowed"))
 		}
 
 		return c.Status(fiber.StatusOK).JSON(
-			pkg.NewSuccessResponse(&Response{
+			httpx.NewSuccessResponse(&Response{
 				FullName: request.FirstName + " " + request.LastName,
 			}, fiber.StatusOK, nil),
 		)

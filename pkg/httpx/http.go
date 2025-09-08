@@ -1,4 +1,4 @@
-package pkg
+package httpx
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, resp *StandardResponse[T]) error {
+func Client[T any](c *fiber.Ctx, method string, url string, req any, resp *StandardResponse[T]) error {
 	client := &http.Client{}
 	reqJson, err := json.Marshal(req)
 	if err != nil {
@@ -49,7 +49,7 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 		return fmt.Errorf("[apicaller] : %w", err)
 	}
 
-	if !checkStatusCode2xx(respHttp.StatusCode) {
+	if !CheckStatusCode2xx(respHttp.StatusCode) {
 		_, file, line, ok := runtime.Caller(1)
 		if !ok {
 			log.Println("[apicaller] : runtime.Caller failed")

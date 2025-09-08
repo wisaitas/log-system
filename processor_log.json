@@ -1,0 +1,42 @@
+{
+    "trace_id": "019929d8-fe21-779a-9135-0729f5dcda64",
+    "timestamp": "2025-09-08T22:01:50+07:00",
+    "duration_ms": "0",
+    "current": {
+        "service": "processor",
+        "method": "POST",
+        "error_message": "b is not allowed",
+        "path": "localhost:8082/do/b",
+        "status_code": "400",
+        "code": "",
+        "file": "C:/Freedom/Repositories/github/log-system/cmd/processor/main.go:32",
+        "request": {
+            "headers": {
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "close",
+                "Content-Length": "39",
+                "Content-Type": "application/json",
+                "Host": "localhost:8082",
+                "User-Agent": "vscode-restclient",
+                "X-Internal-Call": "true"
+            },
+            "body": {
+                "first_name": "John",
+                "last_name": "Doe"
+            }
+        },
+        "response": {
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": {
+                "code": "E40000",
+                "data": null,
+                "pagination": null,
+                "public_message": null,
+                "status_code": 400,
+                "timestamp": "2025-09-08T22:01:50+07:00"
+            }
+        }
+    }
+}

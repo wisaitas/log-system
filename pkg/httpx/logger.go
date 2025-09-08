@@ -1,4 +1,4 @@
-package pkg
+package httpx
 
 import (
 	"encoding/json"
@@ -9,13 +9,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-)
-
-const (
-	HeaderTraceID      = "Trace-Id"
-	HeaderErrSignature = "X-Error-Signature"
-	HeaderInternal     = "X-Internal-Call"
-	HeaderSource       = "X-Source"
 )
 
 func NewLogger(serviceName string) fiber.Handler {
@@ -41,30 +34,30 @@ type Log struct {
 	Timestamp  string `json:"timestamp"`
 	DurationMs string `json:"duration_ms"`
 
-	Current *LogBlock `json:"current"`
-	Source  *LogBlock `json:"source,omitempty"`
+	Current *Block `json:"current"`
+	Source  *Block `json:"source,omitempty"`
 }
 
-type LogBlock struct {
-	Service      string   `json:"service"`
-	Method       string   `json:"method"`
-	ErrorMessage *string  `json:"error_message,omitempty"`
-	Path         string   `json:"path"`
-	StatusCode   string   `json:"status_code"`
-	Code         string   `json:"code"`
-	File         *string  `json:"file,omitempty"`
-	Request      *BodyLog `json:"request"`
-	Response     *BodyLog `json:"response"`
+type Block struct {
+	Service      string  `json:"service"`
+	Method       string  `json:"method"`
+	ErrorMessage *string `json:"error_message,omitempty"`
+	Path         string  `json:"path"`
+	StatusCode   string  `json:"status_code"`
+	Code         string  `json:"code"`
+	File         *string `json:"file,omitempty"`
+	Request      *Body   `json:"request"`
+	Response     *Body   `json:"response"`
 }
 
-type BodyLog struct {
+type Body struct {
 	Headers map[string]string `json:"headers"`
 	Body    map[string]any    `json:"body,omitempty"`
 }
 
 func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	start := time.Now()
-	payload := readJSONMapLimited(c.Body(), 64<<10)
+	payload := ReadJSONMapLimited(c.Body(), 64<<10)
 	requestHeaders := make(map[string]string)
 	c.Request().Header.VisitAll(func(key, value []byte) {
 		if string(key) != HeaderTraceID {
@@ -77,7 +70,7 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	}
 
 	responseBody := c.Response().Body()
-	responsePayload := readJSONMapLimited(responseBody, 64<<10)
+	responsePayload := ReadJSONMapLimited(responseBody, 64<<10)
 	responseHeaders := make(map[string]string)
 	c.Response().Header.VisitAll(func(key, value []byte) {
 		if string(key) != HeaderTraceID && string(key) != HeaderSource {
@@ -86,7 +79,7 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	})
 
 	errorContext := &ErrorContext{}
-	if !checkStatusCode2xx(c.Response().StatusCode()) {
+	if !CheckStatusCode2xx(c.Response().StatusCode()) {
 		errorContextLocal, ok := c.Locals("errorContext").(ErrorContext)
 		if !ok {
 			log.Printf("[middleware] : errorContext not found")
@@ -94,13 +87,13 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 		errorContext = &errorContextLocal
 	}
 
-	current := &LogBlock{
+	current := &Block{
 		Service:      serviceName,
 		Method:       c.Method(),
 		Path:         c.Hostname() + c.Path(),
 		StatusCode:   strconv.Itoa(c.Response().StatusCode()),
-		Request:      &BodyLog{Headers: requestHeaders, Body: payload},
-		Response:     &BodyLog{Headers: responseHeaders, Body: responsePayload},
+		Request:      &Body{Headers: requestHeaders, Body: payload},
+		Response:     &Body{Headers: responseHeaders, Body: responsePayload},
 		ErrorMessage: &errorContext.ErrorMessage,
 		File:         errorContext.FilePath,
 	}
@@ -113,22 +106,22 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	}
 
 	if string(c.Response().Header.Peek(HeaderSource)) != "" {
-		source := new(LogBlock)
+		source := new(Block)
 		if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
 			log.Printf("[middleware] : %s", err.Error())
 		}
 
 		logInfo.Source = source
 	} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
-		source := &LogBlock{
+		source := &Block{
 			Service:      serviceName,
 			Method:       c.Method(),
 			Path:         c.Hostname() + c.Path(),
 			StatusCode:   strconv.Itoa(c.Response().StatusCode()),
 			File:         errorContext.FilePath,
 			ErrorMessage: &errorContext.ErrorMessage,
-			Request:      &BodyLog{Headers: requestHeaders, Body: payload},
-			Response:     &BodyLog{Headers: responseHeaders, Body: responsePayload},
+			Request:      &Body{Headers: requestHeaders, Body: payload},
+			Response:     &Body{Headers: responseHeaders, Body: responsePayload},
 		}
 
 		jsonResp, err := json.Marshal(source)
@@ -149,26 +142,4 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 
 	fmt.Println(string(jsonResp))
 	return err
-}
-
-func checkStatusCode2xx(statusCode int) bool {
-	return statusCode >= 200 && statusCode < 300
-}
-
-func readJSONMapLimited(b []byte, limit int) map[string]any {
-	if len(b) > limit {
-		b = b[:limit]
-	}
-	return tryParseJSON(b)
-}
-
-func tryParseJSON(b []byte) map[string]any {
-	if len(b) == 0 {
-		return nil
-	}
-	var m map[string]any
-	if json.Valid(b) && json.Unmarshal(b, &m) == nil {
-		return m
-	}
-	return nil
 }

@@ -49,8 +49,6 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 		return fmt.Errorf("[apicaller] : %w", err)
 	}
 
-	c.Locals("useCaller", true)
-
 	if !checkStatusCode2xx(respHttp.StatusCode) {
 		_, file, line, ok := runtime.Caller(1)
 		if !ok {

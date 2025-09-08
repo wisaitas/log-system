@@ -27,7 +27,6 @@ func NewLogger(serviceName string) fiber.Handler {
 		}
 		c.Request().Header.Set(HeaderTraceID, traceID)
 		c.Set(HeaderTraceID, traceID)
-		c.Locals("useCaller", false)
 		switch c.Get("Content-Type") {
 		case "application/json":
 			return HandleJSON(c, serviceName)
@@ -113,40 +112,33 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 		Current:    current,
 	}
 
-	useCaller, ok := c.Locals("useCaller").(bool)
-	if !ok {
-		log.Printf("[middleware] : useCaller not found")
-	}
-
-	source := new(LogBlock)
-	if useCaller {
-		if string(c.Response().Header.Peek(HeaderSource)) != "" {
-			fmt.Println("has source")
-			if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
-				log.Printf("[middleware] : %s", err.Error())
-			}
-		} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
-			source = &LogBlock{
-				Service:      serviceName,
-				Method:       c.Method(),
-				Path:         c.Hostname() + c.Path(),
-				StatusCode:   strconv.Itoa(c.Response().StatusCode()),
-				File:         errorContext.FilePath,
-				ErrorMessage: &errorContext.ErrorMessage,
-				Request:      &BodyLog{Headers: requestHeaders, Body: payload},
-				Response:     &BodyLog{Headers: responseHeaders, Body: responsePayload},
-			}
-			jsonResp, err := json.Marshal(source)
-			if err != nil {
-				log.Printf("[middleware] : %s", err.Error())
-			}
-			c.Response().Header.Set(HeaderSource, string(jsonResp))
+	if string(c.Response().Header.Peek(HeaderSource)) != "" {
+		source := new(LogBlock)
+		if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
+			log.Printf("[middleware] : %s", err.Error())
 		}
+
 		logInfo.Source = source
+	} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
+		source := &LogBlock{
+			Service:      serviceName,
+			Method:       c.Method(),
+			Path:         c.Hostname() + c.Path(),
+			StatusCode:   strconv.Itoa(c.Response().StatusCode()),
+			File:         errorContext.FilePath,
+			ErrorMessage: &errorContext.ErrorMessage,
+			Request:      &BodyLog{Headers: requestHeaders, Body: payload},
+			Response:     &BodyLog{Headers: responseHeaders, Body: responsePayload},
+		}
+
+		jsonResp, err := json.Marshal(source)
+		if err != nil {
+			log.Printf("[middleware] : %s", err.Error())
+		}
+		c.Response().Header.Set(HeaderSource, string(jsonResp))
 	}
 
 	if c.Get(HeaderInternal) != "true" {
-		fmt.Println("test 2 ", c.Get(HeaderInternal))
 		c.Response().Header.Del(HeaderSource)
 	}
 

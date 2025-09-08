@@ -1,11 +1,14 @@
 {
-    "timestamp": "2025-09-05T01:29:02+07:00",
+    "trace_id": "01992424-dc17-7ce8-8217-5508b6bd72cf",
+    "timestamp": "2025-09-07T19:26:59+07:00",
     "duration_ms": "0",
     "current": {
         "service": "processor",
         "method": "POST",
+        "error_message": "b is not allowed",
         "path": "localhost:8082/do/b",
         "status_code": "400",
+        "code": "",
         "request": {
             "headers": {
                 "Accept-Encoding": "gzip, deflate, br",
@@ -26,37 +29,14 @@
                 "Content-Type": "application/json"
             },
             "body": {
-                "error": "b is not allowed"
-            }
-        }
-    },
-    "source": {
-        "service": "processor",
-        "method": "POST",
-        "path": "localhost:8082/do/b",
-        "status_code": "400",
-        "request": {
-            "headers": {
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "close",
-                "Content-Length": "39",
-                "Content-Type": "application/json",
-                "Host": "localhost:8082",
-                "User-Agent": "vscode-restclient",
-                "X-Internal-Call": "true"
-            },
-            "body": {
-                "first_name": "John",
-                "last_name": "Doe"
+                "code": "E40000",
+                "data": null,
+                "pagination": null,
+                "public_message": null,
+                "status_code": 400,
+                "timestamp": "2025-09-07T19:26:59+07:00"
             }
         },
-        "response": {
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": {
-                "error": "b is not allowed"
-            }
-        }
+        "file": "/Users/wisaitas.kampanat/Library/CloudStorage/OneDrive-Accenture/repositories/poc/log-system/cmd/processor/main.go:32"
     }
 }

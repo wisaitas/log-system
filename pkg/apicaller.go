@@ -61,7 +61,7 @@ func DownStreamHttp[T any](c *fiber.Ctx, method string, url string, req any, res
 		resp.Pagination = nil
 		c.Locals("errorContext", ErrorContext{
 			FilePath:     &filePath,
-			ErrorMessage: fmt.Sprintf("[apicaller] : error when call %s", c.Request().URI().String()),
+			ErrorMessage: fmt.Sprintf("[apicaller] : error when call %s", url),
 		})
 	}
 

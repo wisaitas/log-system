@@ -38,24 +38,24 @@ func NewLogger(serviceName string) fiber.Handler {
 }
 
 type Log struct {
-	TraceID      string  `json:"trace_id"`
-	ErrorMessage *string `json:"error_message,omitempty"`
-	Timestamp    string  `json:"timestamp"`
-	DurationMs   string  `json:"duration_ms"`
+	TraceID    string `json:"trace_id"`
+	Timestamp  string `json:"timestamp"`
+	DurationMs string `json:"duration_ms"`
 
 	Current *LogBlock `json:"current"`
 	Source  *LogBlock `json:"source,omitempty"`
 }
 
 type LogBlock struct {
-	Service    string   `json:"service"`
-	Method     string   `json:"method"`
-	Path       string   `json:"path"`
-	StatusCode string   `json:"status_code"`
-	Code       string   `json:"code"`
-	Request    *BodyLog `json:"request"`
-	Response   *BodyLog `json:"response"`
-	File       *string  `json:"file,omitempty"`
+	Service      string   `json:"service"`
+	Method       string   `json:"method"`
+	ErrorMessage *string  `json:"error_message,omitempty"`
+	Path         string   `json:"path"`
+	StatusCode   string   `json:"status_code"`
+	Code         string   `json:"code"`
+	File         *string  `json:"file,omitempty"`
+	Request      *BodyLog `json:"request"`
+	Response     *BodyLog `json:"response"`
 }
 
 type BodyLog struct {
@@ -96,21 +96,21 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	}
 
 	current := &LogBlock{
-		Service:    serviceName,
-		Method:     c.Method(),
-		Path:       c.Hostname() + c.Path(),
-		StatusCode: strconv.Itoa(c.Response().StatusCode()),
-		Request:    &BodyLog{Headers: requestHeaders, Body: payload},
-		Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
-		File:       errorContext.FilePath,
+		Service:      serviceName,
+		Method:       c.Method(),
+		Path:         c.Hostname() + c.Path(),
+		StatusCode:   strconv.Itoa(c.Response().StatusCode()),
+		Request:      &BodyLog{Headers: requestHeaders, Body: payload},
+		Response:     &BodyLog{Headers: responseHeaders, Body: responsePayload},
+		ErrorMessage: &errorContext.ErrorMessage,
+		File:         errorContext.FilePath,
 	}
 
 	logInfo := Log{
-		TraceID:      c.Get(HeaderTraceID),
-		ErrorMessage: &errorContext.ErrorMessage,
-		Timestamp:    start.Format(time.RFC3339),
-		DurationMs:   strconv.Itoa(int(time.Since(start).Milliseconds())),
-		Current:      current,
+		TraceID:    c.Get(HeaderTraceID),
+		Timestamp:  start.Format(time.RFC3339),
+		DurationMs: strconv.Itoa(int(time.Since(start).Milliseconds())),
+		Current:    current,
 	}
 
 	useCaller, ok := c.Locals("useCaller").(bool)
@@ -121,18 +121,20 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	source := new(LogBlock)
 	if useCaller {
 		if string(c.Response().Header.Peek(HeaderSource)) != "" {
+			fmt.Println("has source")
 			if err := json.Unmarshal(c.Response().Header.Peek(HeaderSource), source); err != nil {
 				log.Printf("[middleware] : %s", err.Error())
 			}
 		} else if string(c.Response().Header.Peek(HeaderSource)) == "" {
 			source = &LogBlock{
-				Service:    serviceName,
-				Method:     c.Method(),
-				Path:       c.Hostname() + c.Path(),
-				StatusCode: strconv.Itoa(c.Response().StatusCode()),
-				Request:    &BodyLog{Headers: requestHeaders, Body: payload},
-				Response:   &BodyLog{Headers: responseHeaders, Body: responsePayload},
-				File:       errorContext.FilePath,
+				Service:      serviceName,
+				Method:       c.Method(),
+				Path:         c.Hostname() + c.Path(),
+				StatusCode:   strconv.Itoa(c.Response().StatusCode()),
+				File:         errorContext.FilePath,
+				ErrorMessage: &errorContext.ErrorMessage,
+				Request:      &BodyLog{Headers: requestHeaders, Body: payload},
+				Response:     &BodyLog{Headers: responseHeaders, Body: responsePayload},
 			}
 			jsonResp, err := json.Marshal(source)
 			if err != nil {
@@ -144,6 +146,7 @@ func HandleJSON(c *fiber.Ctx, serviceName string) error {
 	}
 
 	if c.Get(HeaderInternal) != "true" {
+		fmt.Println("test 2 ", c.Get(HeaderInternal))
 		c.Response().Header.Del(HeaderSource)
 	}
 
